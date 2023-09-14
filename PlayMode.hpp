@@ -22,19 +22,30 @@ struct PlayMode : Mode {
 	struct Button {
 		uint8_t downs = 0;
 		uint8_t pressed = 0;
-	} left, right, down, up;
+	} E, Q;
 
 	//local copy of the game scene (so code can change it during gameplay):
 	Scene scene;
 
+	// relevant meshes and information about the animation
+	std::array< Scene::Transform*, 7 > beehive_pieces;
+	bool hive_piece_moving = false;
+
+	uint8_t current_hive_piece = 0;
+	glm::vec3 current_hive_piece_base_position;
+
+	Scene::Transform *hive_target_destination;
+	glm::vec3 hive_target_position;
+	glm::vec3 move_distance;
+
 	//hexapod leg to wobble:
-	Scene::Transform *hip = nullptr;
-	Scene::Transform *upper_leg = nullptr;
-	Scene::Transform *lower_leg = nullptr;
-	glm::quat hip_base_rotation;
-	glm::quat upper_leg_base_rotation;
-	glm::quat lower_leg_base_rotation;
-	float wobble = 0.0f;
+//	Scene::Transform *hip = nullptr;
+//	Scene::Transform *upper_leg = nullptr;
+//	Scene::Transform *lower_leg = nullptr;
+//	glm::quat hip_base_rotation;
+//	glm::quat upper_leg_base_rotation;
+//	glm::quat lower_leg_base_rotation;
+//	float wobble = 0.0f;
 	
 	//camera:
 	Scene::Camera *camera = nullptr;

@@ -12,23 +12,23 @@
 
 #include <random>
 
-GLuint hexapod_meshes_for_lit_color_texture_program = 0;
-Load< MeshBuffer > hexapod_meshes(LoadTagDefault, []() -> MeshBuffer const * {
-	MeshBuffer const *ret = new MeshBuffer(data_path("hexapod.pnct"));
-	hexapod_meshes_for_lit_color_texture_program = ret->make_vao_for_program(lit_color_texture_program->program);
+GLuint beehive_meshes_for_lit_color_texture_program = 0;
+Load< MeshBuffer > beehive_meshes(LoadTagDefault, []() -> MeshBuffer const * {
+	MeshBuffer const *ret = new MeshBuffer(data_path("beehive.pnct"));
+	beehive_meshes_for_lit_color_texture_program = ret->make_vao_for_program(lit_color_texture_program->program);
 	return ret;
 });
 
-Load< Scene > hexapod_scene(LoadTagDefault, []() -> Scene const * {
-	return new Scene(data_path("hexapod.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
-		Mesh const &mesh = hexapod_meshes->lookup(mesh_name);
+Load< Scene > beehive_scene(LoadTagDefault, []() -> Scene const * {
+	return new Scene(data_path("beehive.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
+		Mesh const &mesh = beehive_meshes->lookup(mesh_name);
 
 		scene.drawables.emplace_back(transform);
 		Scene::Drawable &drawable = scene.drawables.back();
 
 		drawable.pipeline = lit_color_texture_program_pipeline;
 
-		drawable.pipeline.vao = hexapod_meshes_for_lit_color_texture_program;
+		drawable.pipeline.vao = beehive_meshes_for_lit_color_texture_program;
 		drawable.pipeline.type = mesh.type;
 		drawable.pipeline.start = mesh.start;
 		drawable.pipeline.count = mesh.count;
@@ -36,7 +36,33 @@ Load< Scene > hexapod_scene(LoadTagDefault, []() -> Scene const * {
 	});
 });
 
-PlayMode::PlayMode() : scene(*hexapod_scene) {
+PlayMode::PlayMode() : scene(*beehive_scene) {
+	/* get pointers to relevant meshes for runtime animations */
+	beehive_pieces = std::array< Scene::Transform*, 7 >();
+	uint8_t i = 0;
+
+	for (auto &transform : scene.transforms) {
+		if (transform.name.substr(0, 9) == "HivePiece" && i < beehive_pieces.size()) {
+			beehive_pieces[i] = &transform;
+			i++;
+		}
+		else if (transform.name == "Box") {
+			hive_target_destination = &transform;
+			hive_target_position = hive_target_destination->position;
+		}
+	}
+
+	{ /* Error Handling */
+		/* Checking array for any nullptr, from https://thispointer.com/check-if-any-element-in-array-is-null-in-c/ */
+		auto has_null_ptr = [](const Scene::Transform *ptr) { return ptr == nullptr; };
+		if (std::any_of(std::begin(beehive_pieces), std::end(beehive_pieces), has_null_ptr)) {
+			throw std::runtime_error("At least one beehive piece not found.");
+		}
+
+		if (hive_target_destination == nullptr) throw std::runtime_error("Box not found (hive piece movement destination).");
+	}
+
+	/*
 	//get pointers to leg for convenience:
 	for (auto &transform : scene.transforms) {
 		if (transform.name == "Hip.FL") hip = &transform;
@@ -50,6 +76,7 @@ PlayMode::PlayMode() : scene(*hexapod_scene) {
 	hip_base_rotation = hip->rotation;
 	upper_leg_base_rotation = upper_leg->rotation;
 	lower_leg_base_rotation = lower_leg->rotation;
+	*/
 
 	//get pointer to camera for convenience:
 	if (scene.cameras.size() != 1) throw std::runtime_error("Expecting scene to have exactly one camera, but it has " + std::to_string(scene.cameras.size()));
@@ -59,59 +86,30 @@ PlayMode::PlayMode() : scene(*hexapod_scene) {
 PlayMode::~PlayMode() {
 }
 
-bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size) {
+glm::vec3 calculate_step_size(glm::vec3 total_distance, float elapsed) {
+	return total_distance * elapsed;
+}
 
+bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size) {
 	if (evt.type == SDL_KEYDOWN) {
-		if (evt.key.keysym.sym == SDLK_ESCAPE) {
-			SDL_SetRelativeMouseMode(SDL_FALSE);
-			return true;
-		} else if (evt.key.keysym.sym == SDLK_a) {
-			left.downs += 1;
-			left.pressed = true;
-			return true;
-		} else if (evt.key.keysym.sym == SDLK_d) {
-			right.downs += 1;
-			right.pressed = true;
-			return true;
-		} else if (evt.key.keysym.sym == SDLK_w) {
-			up.downs += 1;
-			up.pressed = true;
-			return true;
-		} else if (evt.key.keysym.sym == SDLK_s) {
-			down.downs += 1;
-			down.pressed = true;
+		if (evt.key.keysym.sym == SDLK_q) {
+			Q.downs += 1;
+			Q.pressed = true;
 			return true;
 		}
-	} else if (evt.type == SDL_KEYUP) {
-		if (evt.key.keysym.sym == SDLK_a) {
-			left.pressed = false;
-			return true;
-		} else if (evt.key.keysym.sym == SDLK_d) {
-			right.pressed = false;
-			return true;
-		} else if (evt.key.keysym.sym == SDLK_w) {
-			up.pressed = false;
-			return true;
-		} else if (evt.key.keysym.sym == SDLK_s) {
-			down.pressed = false;
+		else if (evt.key.keysym.sym == SDLK_e && !hive_piece_moving) {
+			E.downs += 1;
+			E.pressed = true;
 			return true;
 		}
-	} else if (evt.type == SDL_MOUSEBUTTONDOWN) {
-		if (SDL_GetRelativeMouseMode() == SDL_FALSE) {
-			SDL_SetRelativeMouseMode(SDL_TRUE);
+	}
+	else if (evt.type == SDL_KEYUP) {
+		if (evt.key.keysym.sym == SDLK_q) {
+			Q.pressed = false;
 			return true;
 		}
-	} else if (evt.type == SDL_MOUSEMOTION) {
-		if (SDL_GetRelativeMouseMode() == SDL_TRUE) {
-			glm::vec2 motion = glm::vec2(
-				evt.motion.xrel / float(window_size.y),
-				-evt.motion.yrel / float(window_size.y)
-			);
-			camera->transform->rotation = glm::normalize(
-				camera->transform->rotation
-				* glm::angleAxis(-motion.x * camera->fovy, glm::vec3(0.0f, 1.0f, 0.0f))
-				* glm::angleAxis(motion.y * camera->fovy, glm::vec3(1.0f, 0.0f, 0.0f))
-			);
+		else if (evt.key.keysym.sym == SDLK_e) {
+			E.pressed = false;
 			return true;
 		}
 	}
@@ -120,7 +118,42 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 }
 
 void PlayMode::update(float elapsed) {
+	if (Q.pressed) {
+		/* quit directly here if the Q button is clicked */
+		PlayMode::set_current(nullptr);
+		return;
+	}
 
+	if (E.pressed && !hive_piece_moving) {
+		/* if there is a piece available to move, and one is not currently moving, start moving that piece */
+		if (current_hive_piece < beehive_pieces.size() && !hive_piece_moving) {
+			hive_piece_moving = true;
+			current_hive_piece_base_position = beehive_pieces[current_hive_piece]->position;
+
+			if (current_hive_piece > 0) hive_target_position += glm::uvec3(0.0f, 0.0f,
+				beehive_meshes->lookup("HivePiece.00" + std::to_string(current_hive_piece)).max.y);
+
+			move_distance = hive_target_position - current_hive_piece_base_position;
+		}
+	}
+
+	// TODO: update which piece is current and eventually set moving to false
+	/* continue moving already moving piece */
+	if (hive_piece_moving) {
+		beehive_pieces[current_hive_piece]->position += calculate_step_size(move_distance, elapsed);
+		if (glm::all(glm::epsilonEqual(beehive_pieces[current_hive_piece]->position, hive_target_position, 0.01f))) {
+			hive_piece_moving = false;
+			current_hive_piece++;
+		}
+	}
+
+//	if (hive_piece_moving) {
+//		beehive_pieces[current_hive_piece]->position = hive_target_position;
+//		hive_piece_moving = false;
+//		current_hive_piece++;
+//	}
+
+	/*
 	//slowly rotates through [0,1):
 	wobble += elapsed / 10.0f;
 	wobble -= std::floor(wobble);
@@ -137,34 +170,32 @@ void PlayMode::update(float elapsed) {
 		glm::radians(10.0f * std::sin(wobble * 3.0f * 2.0f * float(M_PI))),
 		glm::vec3(0.0f, 0.0f, 1.0f)
 	);
+	 */
 
 	//move camera:
-	{
-
-		//combine inputs into a move:
-		constexpr float PlayerSpeed = 30.0f;
-		glm::vec2 move = glm::vec2(0.0f);
-		if (left.pressed && !right.pressed) move.x =-1.0f;
-		if (!left.pressed && right.pressed) move.x = 1.0f;
-		if (down.pressed && !up.pressed) move.y =-1.0f;
-		if (!down.pressed && up.pressed) move.y = 1.0f;
-
-		//make it so that moving diagonally doesn't go faster:
-		if (move != glm::vec2(0.0f)) move = glm::normalize(move) * PlayerSpeed * elapsed;
-
-		glm::mat4x3 frame = camera->transform->make_local_to_parent();
-		glm::vec3 frame_right = frame[0];
-		//glm::vec3 up = frame[1];
-		glm::vec3 frame_forward = -frame[2];
-
-		camera->transform->position += move.x * frame_right + move.y * frame_forward;
-	}
+//	{
+//		//combine inputs into a move:
+//		constexpr float PlayerSpeed = 30.0f;
+//		glm::vec2 move = glm::vec2(0.0f);
+//		if (left.pressed && !right.pressed) move.x =-1.0f;
+//		if (!left.pressed && right.pressed) move.x = 1.0f;
+//		if (down.pressed && !up.pressed) move.y =-1.0f;
+//		if (!down.pressed && up.pressed) move.y = 1.0f;
+//
+//		//make it so that moving diagonally doesn't go faster:
+//		if (move != glm::vec2(0.0f)) move = glm::normalize(move) * PlayerSpeed * elapsed;
+//
+//		glm::mat4x3 frame = camera->transform->make_local_to_parent();
+//		glm::vec3 frame_right = frame[0];
+//		//glm::vec3 up = frame[1];
+//		glm::vec3 frame_forward = -frame[2];
+//
+//		camera->transform->position += move.x * frame_right + move.y * frame_forward;
+//	}
 
 	//reset button press counters:
-	left.downs = 0;
-	right.downs = 0;
-	up.downs = 0;
-	down.downs = 0;
+	E.downs = 0;
+	Q.downs = 0;
 }
 
 void PlayMode::draw(glm::uvec2 const &drawable_size) {
@@ -179,7 +210,8 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	glUniform3fv(lit_color_texture_program->LIGHT_ENERGY_vec3, 1, glm::value_ptr(glm::vec3(1.0f, 1.0f, 0.95f)));
 	glUseProgram(0);
 
-	glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
+	// making the background color sky blue
+	glClearColor(0.6235f, 0.8471f, 0.9373f, 1.0f);
 	glClearDepth(1.0f); //1.0 is actually the default value to clear the depth buffer to, but FYI you can change it.
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -201,14 +233,14 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 		));
 
 		constexpr float H = 0.09f;
-		lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
+		lines.draw_text("Press E to move a piece of honeycomb into the box; press Q to quit game",
 			glm::vec3(-aspect + 0.1f * H, -1.0 + 0.1f * H, 0.0),
 			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
 			glm::u8vec4(0x00, 0x00, 0x00, 0x00));
 		float ofs = 2.0f / drawable_size.y;
-		lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
+		lines.draw_text("Press E to move a piece of honeycomb into the box; press Q to quit game",
 			glm::vec3(-aspect + 0.1f * H + ofs, -1.0 + + 0.1f * H + ofs, 0.0),
 			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
-			glm::u8vec4(0xff, 0xff, 0xff, 0x00));
+			glm::u8vec4(0x08, 0x08, 0x08, 0x00));
 	}
 }

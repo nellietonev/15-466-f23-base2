@@ -1,15 +1,18 @@
-# (TODO: your game's title)
+# The Bee Move-E
 
-Author: (TODO: your name)
+Author: Nellie Tonev
 
-Design: (TODO: In two sentences or fewer, describe what is new and interesting about your game.)
+Design: Have you ever watched the fascinating process of a beekeeper relocating a bee colony and their hive and wished 
+that you could try it out yourself (without the risk of getting stung, of course)?
+Well, now you can (in an extremely simplified and low-poly way)! 
 
 Screen Shot:
 
-![Screen Shot](screenshot.png)
+![Screen Shot](screenshot-game2.png)
 
 How To Play:
+* Press 'E' to move piece of honeycomb from the watering can to the target box.
+* Press 'Q' to quit the game.
 
-(TODO: describe the controls and (if needed) goals/strategy.)
-
+\
 This game was built with [NEST](NEST.md).
