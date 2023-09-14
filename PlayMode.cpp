@@ -43,7 +43,8 @@ PlayMode::PlayMode() : scene(*beehive_scene) {
 
 	for (auto &transform : scene.transforms) {
 		if (transform.name.substr(0, 9) == "HivePiece" && i < beehive_pieces.size()) {
-			beehive_pieces[i] = &transform;
+			/* ensuring that the hives go to the correct index based on their names */
+			beehive_pieces[(int(transform.name[transform.name.length() - 1]) - '0') - 1] = &transform;
 			i++;
 		}
 		else if (transform.name == "Box") {
@@ -62,32 +63,12 @@ PlayMode::PlayMode() : scene(*beehive_scene) {
 		if (hive_target_destination == nullptr) throw std::runtime_error("Box not found (hive piece movement destination).");
 	}
 
-	/*
-	//get pointers to leg for convenience:
-	for (auto &transform : scene.transforms) {
-		if (transform.name == "Hip.FL") hip = &transform;
-		else if (transform.name == "UpperLeg.FL") upper_leg = &transform;
-		else if (transform.name == "LowerLeg.FL") lower_leg = &transform;
-	}
-	if (hip == nullptr) throw std::runtime_error("Hip not found.");
-	if (upper_leg == nullptr) throw std::runtime_error("Upper leg not found.");
-	if (lower_leg == nullptr) throw std::runtime_error("Lower leg not found.");
-
-	hip_base_rotation = hip->rotation;
-	upper_leg_base_rotation = upper_leg->rotation;
-	lower_leg_base_rotation = lower_leg->rotation;
-	*/
-
 	//get pointer to camera for convenience:
 	if (scene.cameras.size() != 1) throw std::runtime_error("Expecting scene to have exactly one camera, but it has " + std::to_string(scene.cameras.size()));
 	camera = &scene.cameras.front();
 }
 
 PlayMode::~PlayMode() {
-}
-
-glm::vec3 calculate_step_size(glm::vec3 total_distance, float elapsed) {
-	return total_distance * elapsed;
 }
 
 bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size) {
@@ -130,68 +111,28 @@ void PlayMode::update(float elapsed) {
 			hive_piece_moving = true;
 			current_hive_piece_base_position = beehive_pieces[current_hive_piece]->position;
 
-			if (current_hive_piece > 0) hive_target_position += glm::uvec3(0.0f, 0.0f,
-				beehive_meshes->lookup("HivePiece.00" + std::to_string(current_hive_piece)).max.y);
+			/* The multiplier constant is a hard coded solution for a math problem that I'm not sure the source of... I want to
+			 * offset the target destination by the width of the previous mesh */
+			float multiplier = (current_hive_piece == 6) ? 0.15f : ((current_hive_piece == 5) ? 0.2f : 0.12f);
+			if (current_hive_piece > 0) hive_target_position += glm::vec3(0.0f, 0.0f,
+			multiplier * (beehive_meshes->lookup("HivePiece.00" + std::to_string(current_hive_piece)).max.y
+			-  beehive_meshes->lookup("HivePiece.00" + std::to_string(current_hive_piece)).min.y));
 
-			move_distance = hive_target_position - current_hive_piece_base_position;
+			distance_to_move = hive_target_position - current_hive_piece_base_position;
 		}
 	}
 
-	// TODO: update which piece is current and eventually set moving to false
 	/* continue moving already moving piece */
 	if (hive_piece_moving) {
-		beehive_pieces[current_hive_piece]->position += calculate_step_size(move_distance, elapsed);
-		if (glm::all(glm::epsilonEqual(beehive_pieces[current_hive_piece]->position, hive_target_position, 0.01f))) {
+		beehive_pieces[current_hive_piece]->position += (distance_to_move * elapsed);
+		beehive_pieces[current_hive_piece]->rotation.x = 0; /* future iterations might want to gradually rotate this*/
+
+		/* allow for some epsilon/margin of not hitting the exact target position */
+		if (glm::all(glm::epsilonEqual(beehive_pieces[current_hive_piece]->position, hive_target_position, 0.1f))) {
 			hive_piece_moving = false;
 			current_hive_piece++;
 		}
 	}
-
-//	if (hive_piece_moving) {
-//		beehive_pieces[current_hive_piece]->position = hive_target_position;
-//		hive_piece_moving = false;
-//		current_hive_piece++;
-//	}
-
-	/*
-	//slowly rotates through [0,1):
-	wobble += elapsed / 10.0f;
-	wobble -= std::floor(wobble);
-
-	hip->rotation = hip_base_rotation * glm::angleAxis(
-		glm::radians(5.0f * std::sin(wobble * 2.0f * float(M_PI))),
-		glm::vec3(0.0f, 1.0f, 0.0f)
-	);
-	upper_leg->rotation = upper_leg_base_rotation * glm::angleAxis(
-		glm::radians(7.0f * std::sin(wobble * 2.0f * 2.0f * float(M_PI))),
-		glm::vec3(0.0f, 0.0f, 1.0f)
-	);
-	lower_leg->rotation = lower_leg_base_rotation * glm::angleAxis(
-		glm::radians(10.0f * std::sin(wobble * 3.0f * 2.0f * float(M_PI))),
-		glm::vec3(0.0f, 0.0f, 1.0f)
-	);
-	 */
-
-	//move camera:
-//	{
-//		//combine inputs into a move:
-//		constexpr float PlayerSpeed = 30.0f;
-//		glm::vec2 move = glm::vec2(0.0f);
-//		if (left.pressed && !right.pressed) move.x =-1.0f;
-//		if (!left.pressed && right.pressed) move.x = 1.0f;
-//		if (down.pressed && !up.pressed) move.y =-1.0f;
-//		if (!down.pressed && up.pressed) move.y = 1.0f;
-//
-//		//make it so that moving diagonally doesn't go faster:
-//		if (move != glm::vec2(0.0f)) move = glm::normalize(move) * PlayerSpeed * elapsed;
-//
-//		glm::mat4x3 frame = camera->transform->make_local_to_parent();
-//		glm::vec3 frame_right = frame[0];
-//		//glm::vec3 up = frame[1];
-//		glm::vec3 frame_forward = -frame[2];
-//
-//		camera->transform->position += move.x * frame_right + move.y * frame_forward;
-//	}
 
 	//reset button press counters:
 	E.downs = 0;

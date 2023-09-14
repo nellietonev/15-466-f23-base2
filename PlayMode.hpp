@@ -36,16 +36,7 @@ struct PlayMode : Mode {
 
 	Scene::Transform *hive_target_destination;
 	glm::vec3 hive_target_position;
-	glm::vec3 move_distance;
-
-	//hexapod leg to wobble:
-//	Scene::Transform *hip = nullptr;
-//	Scene::Transform *upper_leg = nullptr;
-//	Scene::Transform *lower_leg = nullptr;
-//	glm::quat hip_base_rotation;
-//	glm::quat upper_leg_base_rotation;
-//	glm::quat lower_leg_base_rotation;
-//	float wobble = 0.0f;
+	glm::vec3 distance_to_move;
 	
 	//camera:
 	Scene::Camera *camera = nullptr;
