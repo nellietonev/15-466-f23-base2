@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 
 #include <memory>
+#include <array>
 
 struct Mode : std::enable_shared_from_this< Mode > {
 	virtual ~Mode() { }
