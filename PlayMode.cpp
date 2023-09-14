@@ -10,6 +10,8 @@
 
 #include <glm/gtc/type_ptr.hpp>
 
+#include <array>
+
 #include <random>
 
 GLuint beehive_meshes_for_lit_color_texture_program = 0;
